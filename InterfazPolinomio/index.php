@@ -9,6 +9,7 @@ $paso = 1;
 $grado1 = null;
 $grado2 = null;
 $resultado = null;
+$erroresValidacion = [];
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (isset($_POST['grado1'], $_POST['grado2']) && !isset($_POST['coef1'])) {
@@ -30,42 +31,77 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     } elseif (isset($_POST['coef1'], $_POST['coef2'], $_POST['x'], $_POST['grado1'], $_POST['grado2'])) {
         $grado1 = (int)$_POST['grado1'];
         $grado2 = (int)$_POST['grado2'];
-        $coef1 = array_map('floatval', $_POST['coef1']);
-        $coef2 = array_map('floatval', $_POST['coef2']);
-        $x = (float)$_POST['x'];
-        $p1 = [];
-        $p2 = [];
-        for ($i = 0; $i <= abs($grado1); $i++) {
-            if ($grado1 >= 0) {
-                $p1[$grado1 - $i] = $coef1[$i];
-            } else {
-                $p1[$i - abs($grado1)] = $coef1[$i];
+        $coef1 = $_POST['coef1'];
+        $coef2 = $_POST['coef2'];
+        $x = $_POST['x'];
+
+        if (empty($x) || $x === '') {
+            $erroresValidacion[] = "El valor de x no puede estar vacío";
+        } elseif (!is_numeric($x)) {
+            $erroresValidacion[] = "El valor de x debe ser un número válido";
+        }
+
+        foreach ($coef1 as $index => $coef) {
+            if ($coef === '' || $coef === null) {
+                $erroresValidacion[] = "Todos los coeficientes del polinomio 1 deben tener un valor (puede ser 0)";
+                break;
+            } elseif (!is_numeric($coef)) {
+                $erroresValidacion[] = "Todos los coeficientes del polinomio 1 deben ser números válidos";
+                break;
             }
         }
-        for ($i = 0; $i <= abs($grado2); $i++) {
-            if ($grado2 >= 0) {
-                $p2[$grado2 - $i] = $coef2[$i];
-            } else {
-                $p2[$i - abs($grado2)] = $coef2[$i];
+
+        foreach ($coef2 as $index => $coef) {
+            if ($coef === '' || $coef === null) {
+                $erroresValidacion[] = "Todos los coeficientes del polinomio 2 deben tener un valor (puede ser 0)";
+                break;
+            } elseif (!is_numeric($coef)) {
+                $erroresValidacion[] = "Todos los coeficientes del polinomio 2 deben ser números válidos";
+                break;
             }
         }
-        try {
-            $pol1 = new PolinomioConcreto($p1);
-            $pol2 = new PolinomioConcreto($p2);
-            $suma = PolinomioConcreto::sumarPolinomios($p1, $p2);
-            $polSuma = new PolinomioConcreto($suma);
-            $resultado = [
-                'pol1' => $pol1,
-                'pol2' => $pol2,
-                'polSuma' => $polSuma,
-                'x' => $x
-            ];
-        } catch (Exception $e) {
-            $resultado = [
-                "error" => "Valores incorrectos"
-            ];
+
+        if (empty($erroresValidacion)) {
+            $coef1 = array_map('floatval', $coef1);
+            $coef2 = array_map('floatval', $coef2);
+            $x = (float)$x;
+            $p1 = [];
+            $p2 = [];
+            for ($i = 0; $i <= abs($grado1); $i++) {
+                if ($grado1 >= 0) {
+                    $p1[$grado1 - $i] = $coef1[$i];
+                } else {
+                    $p1[$i - abs($grado1)] = $coef1[$i];
+                }
+            }
+            for ($i = 0; $i <= abs($grado2); $i++) {
+                if ($grado2 >= 0) {
+                    $p2[$grado2 - $i] = $coef2[$i];
+                } else {
+                    $p2[$i - abs($grado2)] = $coef2[$i];
+                }
+            }
+            try {
+                $pol1 = new PolinomioConcreto($p1);
+                $pol2 = new PolinomioConcreto($p2);
+                $suma = PolinomioConcreto::sumarPolinomios($p1, $p2);
+                $polSuma = new PolinomioConcreto($suma);
+                $resultado = [
+                    'pol1' => $pol1,
+                    'pol2' => $pol2,
+                    'polSuma' => $polSuma,
+                    'x' => $x
+                ];
+                $paso = 3;
+            } catch (Exception $e) {
+                $resultado = [
+                    "error" => "Error al procesar los polinomios: " . $e->getMessage()
+                ];
+                $paso = 2;
+            }
+        } else {
+            $paso = 2;
         }
-        $paso = 3;
     }
 }
 ?>
@@ -116,6 +152,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                                 </div>
                             </form>
                         <?php elseif ($paso === 2): ?>
+                            <?php if (!empty($erroresValidacion)): ?>
+                                <div class="alert alert-danger mb-4" role="alert">
+                                    <div class="text-center mb-3">
+                                        <i class="bi bi-exclamation-triangle"></i> 
+                                        <strong>Se encontraron los siguientes errores:</strong>
+                                    </div>
+                                    <ul class="mb-0">
+                                        <?php foreach ($erroresValidacion as $error): ?>
+                                            <li><?= htmlspecialchars($error) ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                    <div class="mt-3 text-center small">
+                                        Por favor, corrija los datos y vuelva a intentarlo.
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                             <form method="POST" class="needs-validation fade-in" novalidate>
                                 <input type="hidden" name="grado1" value="<?= htmlspecialchars((string)$grado1) ?>">
                                 <input type="hidden" name="grado2" value="<?= htmlspecialchars((string)$grado2) ?>">
@@ -147,15 +199,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                                                                 if ($grado1 >= 0) {
                                                                     for ($i = $grado1; $i >= 0; $i--): ?>
                                                                         <td>
-                                                                            <input type="number" step="any" name="coef1[]" class="form-control" required>
+                                                                            <input type="number" step="any" name="coef1[]" class="form-control" required value="<?= isset($_POST['coef1'][$grado1 - $i]) ? htmlspecialchars($_POST['coef1'][$grado1 - $i]) : '' ?>">
                                                                         </td>
                                                                     <?php endfor;
                                                                 } else {
+                                                                    $contador = 0;
                                                                     for ($i = 0; $i >= $grado1; $i--): ?>
                                                                         <td>
-                                                                            <input type="number" step="any" name="coef1[]" class="form-control" required>
+                                                                            <input type="number" step="any" name="coef1[]" class="form-control" required value="<?= isset($_POST['coef1'][$contador]) ? htmlspecialchars($_POST['coef1'][$contador]) : '' ?>">
                                                                         </td>
-                                                                    <?php endfor;
+                                                                    <?php $contador++; endfor;
                                                                 }
                                                                 ?>
                                                             </tr>
@@ -194,15 +247,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                                                                 if ($grado2 >= 0) {
                                                                     for ($i = $grado2; $i >= 0; $i--): ?>
                                                                         <td>
-                                                                            <input type="number" step="any" name="coef2[]" class="form-control" required>
+                                                                            <input type="number" step="any" name="coef2[]" class="form-control" required value="<?= isset($_POST['coef2'][$grado2 - $i]) ? htmlspecialchars($_POST['coef2'][$grado2 - $i]) : '' ?>">
                                                                         </td>
                                                                     <?php endfor;
                                                                 } else {
+                                                                    $contador = 0;
                                                                     for ($i = 0; $i >= $grado2; $i--): ?>
                                                                         <td>
-                                                                            <input type="number" step="any" name="coef2[]" class="form-control" required>
+                                                                            <input type="number" step="any" name="coef2[]" class="form-control" required value="<?= isset($_POST['coef2'][$contador]) ? htmlspecialchars($_POST['coef2'][$contador]) : '' ?>">
                                                                         </td>
-                                                                    <?php endfor;
+                                                                    <?php $contador++; endfor;
                                                                 }
                                                                 ?>
                                                             </tr>
@@ -216,7 +270,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                                 <div class="row mt-4">
                                     <div class="col-md-6 offset-md-3">
                                         <label for="x" class="form-label">Valor de <strong>x</strong>:</label>
-                                        <input type="number" step="any" id="x" name="x" class="form-control" required>
+                                        <input type="number" step="any" id="x" name="x" class="form-control" required value="<?= isset($_POST['x']) ? htmlspecialchars($_POST['x']) : '' ?>">
                                     </div>
                                 </div>
                                 <div class="d-flex justify-content-center mt-4 gap-3">
